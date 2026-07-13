@@ -147,6 +147,9 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
   const { scores, efficiencyPercent, healthVerdict, leakageItems, totalLeakageLow, totalLeakageHigh } = auditResult;
   const [isPaid, setIsPaid] = useState(false);
   const [showWhatsAppSticky, setShowWhatsAppSticky] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [displayPercent, setDisplayPercent] = useState(0);
+  const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const greenCount = scores.filter((s) => s.score === "GREEN").length;
@@ -154,10 +157,40 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
   const redCount = scores.filter((s) => s.score === "RED").length;
 
   useEffect(() => {
-    const handleScroll = () => setShowWhatsAppSticky(window.scrollY > 400);
+    const handleScroll = () => {
+      const totalScroll = document.documentElement.scrollHeight - window.innerHeight;
+      if (totalScroll > 0) {
+        setScrollProgress((window.scrollY / totalScroll) * 100);
+      }
+      setShowWhatsAppSticky(window.scrollY > 400);
+    };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  useEffect(() => {
+    let start = 0;
+    const end = efficiencyPercent;
+    if (start === end) {
+      setDisplayPercent(end);
+      return;
+    }
+    const duration = 1500;
+    const startTime = performance.now();
+    let animationFrameId: number;
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const ease = progress * (2 - progress); // Ease out quad
+      setDisplayPercent(Math.round(ease * end));
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+    animationFrameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [efficiencyPercent]);
 
   const getHealthColor = () => {
     if (efficiencyPercent >= 80) return { color: "text-green-500", bg: "bg-green-500/15", border: "border-green-500/40", bar: "bg-green-500" };
@@ -438,8 +471,41 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
 
   const scoreWord: Record<string, string> = { GREEN: "Healthy", AMBER: "Needs Attention", RED: "Structural Risk" };
 
+  const leakIcons: Record<string, any> = {
+    "Dropout": AlertTriangle,
+    "Conversion": Target,
+    "Fee": DollarSign,
+    "Teacher": Users,
+    "Batch": Building,
+  };
+
+  const getLeakIcon = (area: string) => {
+    for (const key of Object.keys(leakIcons)) {
+      if (area.toLowerCase().includes(key.toLowerCase()) || key.toLowerCase().includes(area.toLowerCase())) {
+        return leakIcons[key];
+      }
+    }
+    return TrendingUp;
+  };
+
+  const maxLeak = Math.max(...leakageItems.map(item => item.highEstimate || 1), 1);
+
+  const handleFilterClick = (filterId: "ALL" | "GREEN" | "AMBER" | "RED") => {
+    if (activeFilter === filterId) {
+      setActiveFilter("ALL");
+    } else {
+      setActiveFilter(filterId);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary via-primary/95 to-primary/85 relative overflow-hidden pb-12">
+      {/* Scroll Progress Bar */}
+      <div 
+        className="fixed top-0 left-0 h-1 bg-gradient-to-r from-accent via-highlight to-green-500 z-50 transition-all duration-100" 
+        style={{ width: `${scrollProgress}%` }}
+      />
+
       {/* Ambient background dots */}
       <div className="absolute inset-0 bg-dot-pattern-dense pointer-events-none opacity-30" />
       {/* Background decoration */}
@@ -499,7 +565,7 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
                         className="fill-none transition-all duration-1000 ease-out"
                         strokeWidth="10"
                         strokeDasharray={`${2 * Math.PI * 52}`}
-                        strokeDashoffset={`${2 * Math.PI * 52 * (1 - efficiencyPercent / 100)}`}
+                        strokeDashoffset={`${2 * Math.PI * 52 * (1 - displayPercent / 100)}`}
                         stroke={
                           efficiencyPercent >= 80 
                             ? "hsl(142, 76%, 45%)" 
@@ -512,7 +578,7 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <span className="font-display font-black text-3xl text-primary-foreground tracking-tighter text-glow-accent">
-                        {efficiencyPercent}%
+                        {displayPercent}%
                       </span>
                       <span className="text-[9px] uppercase tracking-wider font-bold text-primary-foreground/40">
                         Index
@@ -536,21 +602,33 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
 
             {/* Counts profile grid */}
             <div className="lg:col-span-5">
-              <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}
-                className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "Healthy", count: greenCount, bar: "bg-green-500", text: "text-green-400", border: "border-green-500/30", bg: "bg-green-500/10" },
-                  { label: "Needs Attention", count: amberCount, bar: "bg-amber-400", text: "text-amber-400", border: "border-amber-400/30", bg: "bg-amber-400/10" },
-                  { label: "Structural Risk", count: redCount, bar: "bg-red-500", text: "text-red-400", border: "border-red-500/30", bg: "bg-red-500/10" },
-                ].map((item, i) => (
-                  <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.08 }}
-                    className={`${item.bg} border ${item.border} rounded-[1.5rem] p-5 text-center relative overflow-hidden backdrop-blur-sm shadow-sm hover:scale-[1.02] transition-all`}>
-                    <div className={`absolute top-0 left-0 right-0 h-1.5 ${item.bar} rounded-t-2xl`} />
-                    <div className={`text-4xl sm:text-5xl font-display font-black ${item.text} mb-1`}>{item.count}</div>
-                    <div className="text-primary-foreground/50 text-[10px] sm:text-xs leading-snug font-medium">{item.label}</div>
-                  </motion.div>
-                ))}
-              </motion.div>
+                  { label: "Healthy", count: greenCount, bar: "bg-green-500", text: "text-green-400", border: "border-green-500/30", bg: "bg-green-500/10", id: "GREEN", glow: "pulse-glow-green" },
+                  { label: "Needs Attention", count: amberCount, bar: "bg-amber-400", text: "text-amber-400", border: "border-amber-400/30", bg: "bg-amber-400/10", id: "AMBER", glow: "pulse-glow-amber" },
+                  { label: "Structural Risk", count: redCount, bar: "bg-red-500", text: "text-red-400", border: "border-red-500/30", bg: "bg-red-500/10", id: "RED", glow: "pulse-glow-red" },
+                ].map((item, i) => {
+                  const isActive = activeFilter === item.id;
+                  return (
+                    <motion.button 
+                      key={item.label} 
+                      onClick={() => handleFilterClick(item.id as any)}
+                      initial={{ opacity: 0, y: 20 }} 
+                      animate={{ opacity: 1, y: 0 }} 
+                      transition={{ delay: 0.2 + i * 0.08 }}
+                      className={`w-full relative overflow-hidden backdrop-blur-sm shadow-sm transition-all duration-300 rounded-[1.5rem] p-5 text-center border cursor-pointer hover:scale-[1.04] ${item.bg} ${
+                        isActive 
+                          ? `ring-2 ring-offset-2 ring-offset-primary ring-white scale-[1.03] ${item.glow}` 
+                          : `${item.border} hover:border-white/20`
+                      }`}
+                    >
+                      <div className={`absolute top-0 left-0 right-0 h-1.5 ${item.bar} rounded-t-2xl`} />
+                      <div className={`text-4xl sm:text-5xl font-display font-black ${item.text} mb-1`}>{item.count}</div>
+                      <div className="text-primary-foreground/50 text-[10px] sm:text-xs leading-snug font-medium">{item.label}</div>
+                    </motion.button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -569,15 +647,27 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
               <h2 className="font-display font-bold text-primary-foreground text-lg">Estimated Revenue Optimisation Range</h2>
             </div>
             <div className="divide-y divide-primary-foreground/5">
-              {leakageItems.map((item, i) => (
-                <div key={i} className="flex items-center justify-between px-6 py-4 transition-all hover:bg-primary-foreground/3">
-                  <span className="text-primary-foreground/70 text-sm flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-highlight" />
-                    {item.area}
-                  </span>
-                  <span className="font-display font-bold text-primary-foreground text-sm">{item.estimatedMonthly}/mo</span>
-                </div>
-              ))}
+              {leakageItems.map((item, i) => {
+                const LIcon = getLeakIcon(item.area);
+                const percent = ((item.highEstimate || 0) / maxLeak) * 100;
+                return (
+                  <div key={i} className="relative flex items-center justify-between px-6 py-4 transition-all hover:bg-primary-foreground/3 overflow-hidden">
+                    {/* Background Progress bar */}
+                    <div 
+                      className="absolute top-0 left-0 bottom-0 bg-accent/5 transition-all duration-1000 ease-out" 
+                      style={{ width: `${percent}%` }}
+                    />
+                    
+                    <span className="relative z-10 text-primary-foreground/75 text-sm flex items-center gap-2">
+                      <span className="p-1 rounded bg-primary-foreground/10 text-accent">
+                        <LIcon className="h-3.5 w-3.5" />
+                      </span>
+                      {item.area}
+                    </span>
+                    <span className="relative z-10 font-display font-bold text-primary-foreground text-sm">{item.estimatedMonthly}/mo</span>
+                  </div>
+                );
+              })}
             </div>
             <div className="px-6 py-5 bg-highlight/10 border-t border-highlight/20 flex flex-col sm:flex-row items-center justify-between gap-3">
               <span className="font-display font-bold text-highlight text-sm sm:text-base">Total Estimated Opportunity</span>
@@ -647,25 +737,28 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
                   const colors = scoreColors[score.score];
                   const Icon = categoryIcons[score.category] || TrendingUp;
                   const accentBg = score.score === "GREEN" ? "bg-green-500" : score.score === "AMBER" ? "bg-amber-400" : "bg-red-500";
-                  const cardBg = score.score === "GREEN" ? "bg-green-50" : score.score === "AMBER" ? "bg-amber-50" : "bg-red-50";
-                  const cardBdr = score.score === "GREEN" ? "border-green-100" : score.score === "AMBER" ? "border-amber-100" : "border-red-100";
+                  const cardBg = score.score === "GREEN" ? "bg-green-50/60" : score.score === "AMBER" ? "bg-amber-50/60" : "bg-red-50/60";
+                  const cardBdr = score.score === "GREEN" ? "border-green-100/80" : score.score === "AMBER" ? "border-amber-100/80" : "border-red-100/80";
                   const indicator = score.score === "GREEN" ? meta?.greenIndicator : score.score === "AMBER" ? meta?.amberIndicator : meta?.redIndicator;
+                  const isExpanded = expandedMetric === score.category;
 
                   return (
                     <motion.div
                       layout
                       key={score.category}
+                      onClick={() => setExpandedMetric(isExpanded ? null : score.category)}
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ duration: 0.3 }}
-                      className={`${cardBg} border ${cardBdr} rounded-2xl p-5 flex flex-col gap-3 relative overflow-hidden hover:scale-[1.02] transition-all hover:shadow-lg`}
+                      className={`${cardBg} border ${cardBdr} rounded-2xl p-5 flex flex-col gap-3 relative overflow-hidden cursor-pointer hover:scale-[1.02] hover:shadow-md hover:border-slate-300/50 transition-all`}
                     >
                       <div className={`absolute top-0 left-0 bottom-0 w-1.5 ${accentBg} rounded-l-2xl`} />
+                      
                       <div className="pl-2 flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-xl bg-white shadow-sm`}>
-                            <Icon className={`h-5 w-5 ${colors.text}`} />
+                          <div className="p-2 rounded-xl bg-white shadow-sm border border-slate-100">
+                            <Icon className={`h-4.5 w-4.5 ${colors.text}`} />
                           </div>
                           <span className="font-bold text-base text-primary leading-tight">{score.category}</span>
                         </div>
@@ -673,9 +766,59 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
                           {scoreWord[score.score]}
                         </span>
                       </div>
+                      
                       <div className="space-y-2 pl-2">
                         <p className={`text-sm font-semibold ${colors.text}`}>{score.label}</p>
-                        <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">{indicator}</p>
+                        <p className={`text-xs text-slate-500 leading-relaxed ${isExpanded ? "" : "line-clamp-2"}`}>{indicator}</p>
+                      </div>
+
+                      {/* Expandable Section */}
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.25 }}
+                            className="pl-2 pt-2 border-t border-slate-200/60 mt-2 space-y-3"
+                            onClick={(e) => e.stopPropagation()} // stop parent click
+                          >
+                            <div className="bg-white/80 rounded-xl p-3 border border-slate-100">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">What This Measures</p>
+                              <p className="text-xs text-slate-600 leading-relaxed">{meta?.whatItMeans}</p>
+                            </div>
+
+                            {!isPaid ? (
+                              <div className="bg-primary/5 rounded-xl p-3 border border-dashed border-primary/20 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                  <Lock className="h-3.5 w-3.5 text-accent animate-pulse" />
+                                  <p className="text-[10px] font-bold text-primary/70 uppercase tracking-wider">Metrics & Benchmarks Locked</p>
+                                </div>
+                                <button 
+                                  onClick={handlePayment} 
+                                  className="text-[10px] font-black text-accent hover:text-accent/80 transition-colors uppercase tracking-wider"
+                                >
+                                  Unlock Now
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-red-500/5 rounded-xl p-3 border border-red-500/10">
+                                  <p className="text-[10px] font-bold text-red-700/80 uppercase tracking-wider mb-1">Your Metrics</p>
+                                  <p className="text-xs text-foreground font-semibold">{score.details}</p>
+                                </div>
+                                <div className="bg-green-500/5 rounded-xl p-3 border border-green-500/10">
+                                  <p className="text-[10px] font-bold text-green-700/80 uppercase tracking-wider mb-1">Audit Benchmark</p>
+                                  <p className="text-xs text-foreground font-semibold leading-relaxed">{meta?.benchmark}</p>
+                                </div>
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="pl-2 flex justify-center text-slate-300 hover:text-slate-400 transition-colors mt-1">
+                        <ChevronRight className={`h-4 w-4 transform transition-transform duration-300 ${isExpanded ? "rotate-90 text-accent animate-pulse" : ""}`} />
                       </div>
                     </motion.div>
                   );
@@ -687,7 +830,7 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
         {/* ── DETAILED BREAKDOWN (paywall / unlocked) ── */}
         {!isPaid ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-            className="w-full rounded-[2.5rem] bg-primary-foreground/5 border-2 border-accent/20 overflow-hidden relative shadow-2xl p-1 relative">
+            className="w-full rounded-[2.5rem] bg-primary-foreground/5 border-2 border-accent/20 overflow-hidden relative shadow-2xl p-1">
             <div className="blur-sm opacity-20 pointer-events-none p-6 space-y-4 select-none">
               {scores.slice(0, 4).map((score) => {
                 const colors = scoreColors[score.score];
@@ -700,10 +843,10 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
                 );
               })}
             </div>
-            <div className="absolute inset-0 flex items-center justify-center bg-primary/80 backdrop-blur-sm p-6 sm:p-10">
-              <div className="text-center max-w-xl bg-primary/45 border border-primary-foreground/10 p-8 rounded-[2rem] shadow-2xl backdrop-blur-md">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/20 border border-accent/40 mb-5 animate-float">
-                  <Lock className="h-8 w-8 text-accent text-glow-accent" />
+            <div className="absolute inset-0 flex items-center justify-center bg-primary/85 backdrop-blur-sm p-6 sm:p-10">
+              <div className="text-center max-w-xl bg-primary-foreground/5 border border-primary-foreground/15 p-8 rounded-[2rem] shadow-2xl backdrop-blur-lg relative overflow-hidden shimmer-effect">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/20 border border-accent/40 mb-5">
+                  <Lock className="h-8 w-8 text-accent text-glow-accent animate-pulse" />
                 </div>
                 <h3 className="font-display font-black text-2xl sm:text-3xl text-primary-foreground mb-3 text-glow-accent">Unlock Full Assessment Report</h3>
                 <p className="text-primary-foreground/60 text-xs sm:text-sm mb-6 leading-relaxed">
@@ -833,8 +976,8 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
 
         {/* ── CONSULTING LADDER ── */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-          className="w-full">
-          <div className="flex items-center gap-3 mb-6">
+          className="w-full relative">
+          <div className="flex items-center gap-3 mb-8">
             <div className="h-px flex-1 bg-primary-foreground/10" />
             <h2 className="text-primary-foreground font-display font-black text-xl sm:text-2xl flex items-center gap-2 text-glow-accent">
               <Sparkles className="h-5 w-5 text-accent animate-pulse" /> Structured Next Steps
@@ -842,7 +985,11 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
             <div className="h-px flex-1 bg-primary-foreground/10" />
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="relative grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Timeline connector line */}
+            <div className="absolute top-1/2 left-8 right-8 h-0.5 bg-gradient-to-r from-accent/25 via-highlight/25 to-green-500/25 hidden md:block -translate-y-1/2 pointer-events-none" />
+            <div className="absolute left-10 top-12 bottom-12 w-0.5 bg-gradient-to-b from-accent/25 via-highlight/25 to-green-500/25 block md:hidden pointer-events-none" />
+
             {[
               {
                 title: "Diagnostic Review",
@@ -850,9 +997,11 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
                 desc: "45-minute live session. We break down your report, quantify your revenue ceiling, and identify your top 2 structural corrections.",
                 features: ["Revenue gap breakdown", "Top 2 leak zones identified", "₹1Cr billing viability assessment"],
                 cta: "Book Diagnostic Review",
-                bg: "bg-accent/5",
-                border: "border-accent/30",
+                bg: "bg-accent/5 hover:bg-accent/10",
+                border: "border-accent/30 hover:border-accent/60",
                 btnClass: "bg-accent text-accent-foreground hover:bg-accent/90 shadow-accent/20",
+                colorAccent: "text-accent",
+                numBg: "bg-accent text-accent-foreground"
               },
               {
                 title: "Strategic Architecture",
@@ -860,9 +1009,11 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
                 desc: "Complete structural redesign plan. Fee structure, batch architecture, premium program layering, and 90-day roadmap.",
                 features: ["Fee structure redesign", "Batch architecture blueprint", "90-day correction plan"],
                 cta: "Enquire via WhatsApp",
-                bg: "bg-highlight/5",
-                border: "border-highlight/30",
+                bg: "bg-highlight/5 hover:bg-highlight/10",
+                border: "border-highlight/30 hover:border-highlight/60",
                 btnClass: "bg-highlight text-highlight-foreground hover:bg-highlight/90 shadow-highlight/20",
+                colorAccent: "text-highlight",
+                numBg: "bg-highlight text-highlight-foreground"
               },
               {
                 title: "Implementation Program",
@@ -870,22 +1021,26 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
                 desc: "Structured execution support. SOPs, teacher allocation, admission funnel, collection discipline, and 60-90 day handholding.",
                 features: ["Full systems setup", "SOP documentation", "60-90 day support"],
                 cta: "Enquire via WhatsApp",
-                bg: "bg-green-500/5",
-                border: "border-green-500/30",
+                bg: "bg-green-500/5 hover:bg-green-500/10",
+                border: "border-green-500/30 hover:border-green-500/60",
                 btnClass: "bg-green-500 text-primary-foreground hover:bg-green-600 shadow-green-500/20",
+                colorAccent: "text-green-400",
+                numBg: "bg-green-500 text-primary-foreground"
               },
             ].map((tier, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 + i * 0.08 }}
-                className={`${tier.bg} border-2 ${tier.border} rounded-3xl p-6 sm:p-8 flex flex-col justify-between backdrop-blur-sm relative overflow-hidden group shadow-lg hover:shadow-2xl transition-all`}>
-                <div className="absolute top-0 right-0 p-3">
-                  <span className="text-[9px] uppercase tracking-widest text-primary-foreground/30 font-bold bg-primary-foreground/5 px-2.5 py-1 rounded-full">
-                    Stage {i + 1}
+              <motion.div key={i} initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 + i * 0.08 }}
+                className={`${tier.bg} border-2 ${tier.border} rounded-3xl p-6 sm:p-8 flex flex-col justify-between backdrop-blur-sm relative overflow-hidden group shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2`}>
+                
+                {/* Timeline dot badge */}
+                <div className="absolute top-4 left-4 md:static mb-6">
+                  <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-black text-sm ${tier.numBg} shadow-md`}>
+                    {i + 1}
                   </span>
                 </div>
                 
-                <div>
-                  <h3 className="font-display font-black text-primary-foreground text-xl mb-1">{tier.title}</h3>
-                  {tier.price && <p className="font-display font-bold text-accent text-lg mb-4 text-glow-accent">{tier.price}</p>}
+                <div className="pt-6 md:pt-0">
+                  <h3 className="font-display font-black text-primary-foreground text-xl mb-1 group-hover:text-glow-accent transition-all">{tier.title}</h3>
+                  {tier.price && <p className={`font-display font-bold ${tier.colorAccent} text-lg mb-4`}>{tier.price}</p>}
                   <p className="text-primary-foreground/60 text-xs sm:text-sm leading-relaxed mb-6 border-b border-primary-foreground/5 pb-4">{tier.desc}</p>
                   
                   <div className="space-y-3 mb-8">
@@ -931,7 +1086,7 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-green-600 to-green-700 rounded-[2rem] p-6 flex flex-col items-start justify-between relative overflow-hidden shadow-2xl border border-green-500/20">
+          <div className="bg-gradient-to-br from-green-600 to-green-700 rounded-[2rem] p-6 flex flex-col items-start justify-between relative overflow-hidden shadow-2xl border border-green-500/20 hover:scale-[1.01] transition-transform">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_60%)] animate-pulse" />
             <div className="relative z-10">
               <h3 className="font-display font-black text-primary-foreground text-xl leading-tight mb-2">Ready for Guided System Redesign?</h3>
