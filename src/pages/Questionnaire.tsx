@@ -152,20 +152,28 @@ const Questionnaire = () => {
     setShowCalculationLoader(true);
     setLoaderStage(0);
 
-    const interval = setInterval(() => {
-      setLoaderStage((prev) => {
-        if (prev >= loaderMessages.length - 1) {
+    // Faster stage interval (400ms per step = ~2.8s total instead of ~5.3s)
+    const STAGE_INTERVAL_MS = 400;
+    let stageCount = 0;
+
+    const stagesDone = new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        stageCount++;
+        if (stageCount >= loaderMessages.length - 1) {
           clearInterval(interval);
-          return prev;
+          setLoaderStage(loaderMessages.length - 1);
+          resolve();
+        } else {
+          setLoaderStage(stageCount);
         }
-        return prev + 1;
-      });
-    }, 700);
+      }, STAGE_INTERVAL_MS);
+    });
 
     try {
       const result = calculateAudit(formData as any);
 
-      await supabase.from("audit_submissions").insert({
+      // Run DB insert, Zapier webhook, and stage animation in parallel
+      const dbInsert = supabase.from("audit_submissions").insert({
         institution_name: formData.institutionName,
         owner_name: formData.ownerName,
         email: formData.email,
@@ -208,8 +216,14 @@ const Questionnaire = () => {
         }),
       });
 
-      // Bounded delay to complete stages before rendering dashboard
-      await new Promise((resolve) => setTimeout(resolve, loaderMessages.length * 700 + 400));
+      // Wait for BOTH the animation stages AND the DB insert to finish
+      await Promise.all([stagesDone, dbInsert]);
+
+      // Brief pause on the final "Finalizing..." stage so user sees it complete
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      // Transition to the results page
+      setShowCalculationLoader(false);
       setAuditResult(result);
       toast({ title: "Audit Complete!", description: "Your Institutional Structural Performance Audit is ready." });
     } catch (error) {
@@ -217,7 +231,6 @@ const Questionnaire = () => {
       toast({ title: "Submission Error", description: "Please try again.", variant: "destructive" });
       setShowCalculationLoader(false);
     } finally {
-      clearInterval(interval);
       setIsSubmitting(false);
     }
   };
