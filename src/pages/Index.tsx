@@ -4,10 +4,12 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import {
   ArrowRight, TrendingDown, Users, DollarSign, AlertTriangle,
   BarChart3, Shield, Target, Layers, Zap, Building, BookOpen,
-  CheckCircle, ChevronRight, ArrowDown, Sparkles, Star
+  CheckCircle, ChevronRight, ArrowDown, Sparkles, Star,
+  LayoutDashboard, LogIn, SlidersHorizontal
 } from "lucide-react";
 import arkLogo from "@/assets/ark-logo.png";
 import Footer from "@/components/Footer";
+import { useAuth } from "@/contexts/AuthContext";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -22,6 +24,7 @@ const stagger = {
 const Index = () => {
   const { scrollYProgress } = useScroll();
   const heroOpacity = useTransform(scrollYProgress, [0, 0.15], [1, 0]);
+  const { session, isManagement } = useAuth();
 
   // Calculator and tabs state
   const [calcStrength, setCalcStrength] = useState<string>("100–200");
@@ -66,6 +69,39 @@ const Index = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-background overflow-x-hidden">
+      {/* ═══════════════════════════════════════════════════════════
+          TOP NAV — account entry points
+       ═══════════════════════════════════════════════════════════ */}
+      <nav className="absolute top-0 right-0 z-30 flex items-center gap-2 p-4 sm:p-6">
+        {session ? (
+          <>
+            {isManagement && (
+              <Link to="/dashboard"
+                className="flex items-center gap-1.5 rounded-xl border border-primary-foreground/12 bg-primary-foreground/8 px-3.5 py-2.5 text-xs font-bold text-primary-foreground/80 backdrop-blur-md transition-all hover:bg-primary-foreground/15">
+                <LayoutDashboard className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </Link>
+            )}
+            <Link to="/planner"
+              className="flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2.5 text-xs font-black text-accent-foreground shadow-lg shadow-accent/20 transition-all hover:scale-105">
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              My Planner
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link to="/auth"
+              className="flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 text-xs font-bold text-primary-foreground/60 transition-all hover:bg-primary-foreground/10 hover:text-primary-foreground">
+              <LogIn className="h-3.5 w-3.5" /> Sign in
+            </Link>
+            <Link to="/auth?mode=signup"
+              className="rounded-xl bg-accent px-4 py-2.5 text-xs font-black text-accent-foreground shadow-lg shadow-accent/20 transition-all hover:scale-105">
+              Create account
+            </Link>
+          </>
+        )}
+      </nav>
+
       {/* ═══════════════════════════════════════════════════════════
           SECTION 1 — HERO
        ═══════════════════════════════════════════════════════════ */}

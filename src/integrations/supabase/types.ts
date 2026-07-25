@@ -43,6 +43,7 @@ export type Database = {
           total_leakage_high: number | null
           total_leakage_low: number | null
           total_teaching_area: string
+          user_id: string | null
         }
         Insert: {
           avg_fee_per_student: string
@@ -72,6 +73,7 @@ export type Database = {
           total_leakage_high?: number | null
           total_leakage_low?: number | null
           total_teaching_area: string
+          user_id?: string | null
         }
         Update: {
           avg_fee_per_student?: string
@@ -101,6 +103,85 @@ export type Database = {
           total_leakage_high?: number | null
           total_leakage_low?: number | null
           total_teaching_area?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          institution_name: string
+          is_paid: boolean
+          last_seen_at: string | null
+          location: string
+          phone: string
+          razorpay_payment_id: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string
+          id: string
+          institution_name?: string
+          is_paid?: boolean
+          last_seen_at?: string | null
+          location?: string
+          phone?: string
+          razorpay_payment_id?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          institution_name?: string
+          is_paid?: boolean
+          last_seen_at?: string | null
+          location?: string
+          phone?: string
+          razorpay_payment_id?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      planner_scenarios: {
+        Row: {
+          created_at: string
+          groups: Json
+          id: string
+          institution_name: string
+          monthly_expenses: number
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          groups?: Json
+          id?: string
+          institution_name?: string
+          monthly_expenses?: number
+          name?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          groups?: Json
+          id?: string
+          institution_name?: string
+          monthly_expenses?: number
+          name?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -109,10 +190,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_management: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      role_for_email: {
+        Args: { p_email: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "management" | "client"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -239,6 +327,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["management", "client"],
+    },
   },
 } as const

@@ -9,6 +9,8 @@ import {
 import jsPDF from "jspdf";
 import arkLogo from "@/assets/ark-logo.png";
 import type { AuditResult, ScoreResult, LeakageItem } from "@/utils/scoring";
+import { useAuth } from "@/contexts/AuthContext";
+import { CONSULTING_TIERS, formatPrice, REPORT_UNLOCK_PRICE, toPaise } from "@/utils/pricing";
 
 interface ScoreCardProps {
   auditResult: AuditResult;
@@ -145,7 +147,11 @@ const formatCurrency = (n: number) => {
 
 const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps) => {
   const { scores, efficiencyPercent, healthVerdict, leakageItems, totalLeakageLow, totalLeakageHigh } = auditResult;
-  const [isPaid, setIsPaid] = useState(false);
+  const { hasFullAccess, isManagement, markPaid } = useAuth();
+  // Management is free and paid clients carry their unlock on their profile;
+  // `justPaid` covers the moment between checkout and the profile refreshing.
+  const [justPaid, setJustPaid] = useState(false);
+  const isPaid = hasFullAccess || justPaid;
   const [showWhatsAppSticky, setShowWhatsAppSticky] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [displayPercent, setDisplayPercent] = useState(0);
@@ -199,6 +205,9 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
   };
 
   const handlePayment = () => {
+    // Management never sees checkout.
+    if (hasFullAccess) { setJustPaid(true); return; }
+
     const loadRazorpay = () =>
       new Promise<boolean>((resolve) => {
         if ((window as any).Razorpay) { resolve(true); return; }
@@ -213,12 +222,16 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
       if (!loaded) { alert("Failed to load payment gateway. Please try again."); return; }
       const options = {
         key: "rzp_live_SJsZnzaEsydgeI",
-        amount: 89900,
+        amount: toPaise(REPORT_UNLOCK_PRICE),
         currency: "INR",
         name: "ARK Consulting",
         description: "Institutional Structural Performance Audit — Full Report",
         image: arkLogo,
-        handler: () => setIsPaid(true),
+        handler: (response: { razorpay_payment_id?: string }) => {
+          setJustPaid(true);
+          // Persist the unlock so the report stays open on the next sign-in.
+          markPaid(response?.razorpay_payment_id);
+        },
         prefill: { name: institutionName },
         notes: { institution: institutionName },
         theme: { color: "#0B2C55" },
@@ -868,7 +881,7 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
                 <motion.button onClick={handlePayment} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                   className="w-full inline-flex items-center justify-center gap-3 px-8 py-4 rounded-xl bg-accent hover:bg-accent/90 text-accent-foreground font-display font-black text-base sm:text-lg shadow-xl shadow-accent/20 transition-all hover:shadow-accent/45">
                   <Crown className="h-5 w-5 animate-pulse" />
-                  Unlock Full Report — ₹899
+                  Unlock Full Report — {formatPrice(REPORT_UNLOCK_PRICE)}
                   <ChevronRight className="h-5 w-5" />
                 </motion.button>
               </div>
@@ -880,7 +893,14 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
             <div className="bg-gradient-to-r from-green-600 to-green-500 px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <Unlock className="h-5 w-5 text-primary-foreground animate-bounce-subtle" />
-                <h3 className="font-display font-bold text-lg text-primary-foreground">Full Structural Breakdown — Unlocked</h3>
+                <h3 className="font-display font-bold text-lg text-primary-foreground">
+                  Full Structural Breakdown — Unlocked
+                  {isManagement && (
+                    <span className="ml-2 rounded-full bg-primary-foreground/20 px-2.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wider">
+                      Management — free
+                    </span>
+                  )}
+                </h3>
               </div>
               <motion.button onClick={handleDownloadPDF} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                 className="flex items-center gap-2 bg-white text-green-700 font-bold text-sm px-5 py-2.5 rounded-xl shadow transition-all hover:bg-green-50">
@@ -985,77 +1005,46 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
             <div className="h-px flex-1 bg-primary-foreground/10" />
           </div>
           
-          <div className="relative grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="relative grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 lg:gap-8">
             {/* Timeline connector line */}
-            <div className="absolute top-1/2 left-8 right-8 h-0.5 bg-gradient-to-r from-accent/25 via-highlight/25 to-green-500/25 hidden md:block -translate-y-1/2 pointer-events-none" />
-            <div className="absolute left-10 top-12 bottom-12 w-0.5 bg-gradient-to-b from-accent/25 via-highlight/25 to-green-500/25 block md:hidden pointer-events-none" />
+            <div className="absolute top-1/2 left-8 right-8 h-0.5 bg-gradient-to-r from-accent/25 via-highlight/25 to-green-500/25 hidden xl:block -translate-y-1/2 pointer-events-none" />
 
-            {[
-              {
-                title: "Diagnostic Review",
-                price: "₹899",
-                desc: "45-minute live session. We break down your report, quantify your revenue ceiling, and identify your top 2 structural corrections.",
-                features: ["Revenue gap breakdown", "Top 2 leak zones identified", "₹1Cr billing viability assessment"],
-                cta: "Book Diagnostic Review",
-                bg: "bg-accent/5 hover:bg-accent/10",
-                border: "border-accent/30 hover:border-accent/60",
-                btnClass: "bg-accent text-accent-foreground hover:bg-accent/90 shadow-accent/20",
-                colorAccent: "text-accent",
-                numBg: "bg-accent text-accent-foreground"
-              },
-              {
-                title: "Strategic Architecture",
-                price: "Architectural Blueprinting",
-                desc: "Complete structural redesign plan. Fee structure, batch architecture, premium program layering, and 90-day roadmap.",
-                features: ["Fee structure redesign", "Batch architecture blueprint", "90-day correction plan"],
-                cta: "Enquire via WhatsApp",
-                bg: "bg-highlight/5 hover:bg-highlight/10",
-                border: "border-highlight/30 hover:border-highlight/60",
-                btnClass: "bg-highlight text-highlight-foreground hover:bg-highlight/90 shadow-highlight/20",
-                colorAccent: "text-highlight",
-                numBg: "bg-highlight text-highlight-foreground"
-              },
-              {
-                title: "Implementation Program",
-                price: "Full-Scale Implementation",
-                desc: "Structured execution support. SOPs, teacher allocation, admission funnel, collection discipline, and 60-90 day handholding.",
-                features: ["Full systems setup", "SOP documentation", "60-90 day support"],
-                cta: "Enquire via WhatsApp",
-                bg: "bg-green-500/5 hover:bg-green-500/10",
-                border: "border-green-500/30 hover:border-green-500/60",
-                btnClass: "bg-green-500 text-primary-foreground hover:bg-green-600 shadow-green-500/20",
-                colorAccent: "text-green-400",
-                numBg: "bg-green-500 text-primary-foreground"
-              },
-            ].map((tier, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 + i * 0.08 }}
-                className={`${tier.bg} border-2 ${tier.border} rounded-3xl p-6 sm:p-8 flex flex-col justify-between backdrop-blur-sm relative overflow-hidden group shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2`}>
-                
+            {CONSULTING_TIERS.map((tier, i) => (
+              <motion.div key={tier.id} initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 + i * 0.08 }}
+                className={`${tier.bg} border-2 ${tier.border} rounded-3xl p-6 sm:p-7 flex flex-col justify-between backdrop-blur-sm relative overflow-hidden group shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2`}>
+
                 {/* Timeline dot badge */}
-                <div className="absolute top-4 left-4 md:static mb-6">
+                <div className="mb-5">
                   <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-black text-sm ${tier.numBg} shadow-md`}>
                     {i + 1}
                   </span>
                 </div>
-                
-                <div className="pt-6 md:pt-0">
-                  <h3 className="font-display font-black text-primary-foreground text-xl mb-1 group-hover:text-glow-accent transition-all">{tier.title}</h3>
-                  {tier.price && <p className={`font-display font-bold ${tier.colorAccent} text-lg mb-4`}>{tier.price}</p>}
-                  <p className="text-primary-foreground/60 text-xs sm:text-sm leading-relaxed mb-6 border-b border-primary-foreground/5 pb-4">{tier.desc}</p>
-                  
-                  <div className="space-y-3 mb-8">
+
+                <div>
+                  <h3 className="font-display font-black text-primary-foreground text-lg sm:text-xl mb-1 group-hover:text-glow-accent transition-all">{tier.title}</h3>
+                  {tier.price !== null && (
+                    <p className={`font-display font-black ${tier.colorAccent} text-2xl leading-none mb-1`}>
+                      {formatPrice(tier.price)}
+                    </p>
+                  )}
+                  {tier.priceNote && (
+                    <p className="text-primary-foreground/40 text-[11px] font-semibold uppercase tracking-wider mb-4">{tier.priceNote}</p>
+                  )}
+                  <p className="text-primary-foreground/60 text-xs sm:text-sm leading-relaxed mb-5 border-b border-primary-foreground/5 pb-4">{tier.desc}</p>
+
+                  <div className="space-y-2.5 mb-7">
                     {tier.features.map((f) => (
-                      <div key={f} className="flex items-center gap-2.5 text-xs text-primary-foreground/80">
-                        <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                        <span>{f}</span>
+                      <div key={f} className="flex items-start gap-2.5 text-xs text-primary-foreground/80">
+                        <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0 mt-px" />
+                        <span className="leading-snug">{f}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <motion.button onClick={handleWhatsApp} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                  className={`w-full flex items-center justify-center gap-2 ${tier.btnClass} font-display font-black text-sm px-5 py-3.5 rounded-xl shadow-lg transition-all`}>
-                  <MessageCircle className="h-4.5 w-4.5" /> {tier.cta}
+                  className={`w-full flex items-center justify-center gap-2 ${tier.btnClass} font-display font-black text-xs sm:text-sm px-4 py-3.5 rounded-xl shadow-lg transition-all`}>
+                  <MessageCircle className="h-4 w-4 flex-shrink-0" /> {tier.cta}
                 </motion.button>
               </motion.div>
             ))}

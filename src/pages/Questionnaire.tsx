@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Send, Loader2, TrendingUp, Users, DollarSign, Building, Target, CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -6,6 +6,7 @@ import arkLogo from "@/assets/ark-logo.png";
 import ScoreCard from "@/components/ScoreCard";
 import { calculateAudit, type AuditResult } from "@/utils/scoring";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface FormData {
@@ -113,6 +114,20 @@ const Questionnaire = () => {
   
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, profile } = useAuth();
+
+  // Signed-in users shouldn't retype what their account already knows.
+  useEffect(() => {
+    if (!profile) return;
+    setFormData((prev) => ({
+      ...prev,
+      institutionName: prev.institutionName || profile.institution_name,
+      ownerName: prev.ownerName || profile.full_name,
+      email: prev.email || profile.email,
+      phone: prev.phone || profile.phone,
+      location: prev.location || profile.location,
+    }));
+  }, [profile]);
 
   const handleChange = (key: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -174,6 +189,7 @@ const Questionnaire = () => {
 
       // Run DB insert, Zapier webhook, and stage animation in parallel
       const dbInsert = supabase.from("audit_submissions").insert({
+        user_id: user?.id ?? null,
         institution_name: formData.institutionName,
         owner_name: formData.ownerName,
         email: formData.email,
