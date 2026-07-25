@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft, Plus, Trash2, Settings2, Check, X, Loader2, Users,
+  ArrowLeft, Plus, Minus, Trash2, Settings2, Check, X, Loader2, Users,
   TrendingUp, TrendingDown, Wallet, PieChart, LayoutDashboard, LogOut,
   AlertTriangle, CheckCircle, RotateCcw, Sparkles, IndianRupee, ClipboardList,
 } from "lucide-react";
@@ -205,14 +205,6 @@ const Planner = () => {
     () => (state ? PROJECTION_STEPS.map((p) => project(state, p)) : []),
     [state]
   );
-  const maxRowRevenue = useMemo(() => {
-    if (!state) return 0;
-    return Math.max(
-      1,
-      ...state.groups.flatMap((g) => g.standards.map((s) => s.capacity * feeOf(s, g)))
-    );
-  }, [state]);
-
   if (!state || !summary) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-primary">
@@ -352,7 +344,7 @@ const Planner = () => {
         </div>
 
         {/* ── Controls ── */}
-        <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <div className="grid gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5 lg:grid-cols-[auto_1fr_auto] lg:items-end">
           <div>
             <label htmlFor="monthly-expenses" className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               Fixed monthly expenses
@@ -364,7 +356,7 @@ const Planner = () => {
                 type="number" min={0} step={1000}
                 value={state.monthlyExpenses}
                 onChange={(e) => setState({ ...state, monthlyExpenses: Math.max(0, Number(e.target.value) || 0) })}
-                className="w-44 rounded-xl border border-border bg-background py-2.5 pl-8 pr-3 font-display text-sm font-bold text-foreground outline-none transition-all focus:border-accent focus:ring-2 focus:ring-accent/20"
+                className="w-full rounded-xl border border-border bg-background py-2.5 pl-8 pr-3 font-display text-sm font-bold text-foreground outline-none transition-all focus:border-accent focus:ring-2 focus:ring-accent/20 lg:w-48"
               />
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">
@@ -372,21 +364,23 @@ const Planner = () => {
             </p>
           </div>
 
-          <div className="flex-1">
+          <div>
             <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               Fill every batch to
             </p>
-            <div className="flex flex-wrap gap-2">
-              {QUICK_FILLS.map((p) => (
+            <div className="inline-flex w-full overflow-hidden rounded-xl border border-border bg-background sm:w-auto">
+              {QUICK_FILLS.map((p, i) => (
                 <button key={p} onClick={() => fillAll(p)}
-                  className="rounded-xl border border-border bg-background px-4 py-2.5 font-display text-xs font-bold text-foreground transition-all hover:border-accent hover:bg-accent hover:text-accent-foreground">
+                  className={`flex-1 px-3 py-2.5 font-display text-xs font-bold text-foreground transition-all hover:bg-accent hover:text-accent-foreground sm:flex-none sm:px-5 ${
+                    i > 0 ? "border-l border-border" : ""
+                  }`}>
                   {p}%
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-center">
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-muted/50 px-4 py-2.5 lg:flex-col lg:items-end lg:justify-center lg:text-right">
             <p className="text-[11px] font-semibold text-muted-foreground">Total capacity</p>
             <p className="font-display text-lg font-black text-foreground">{summary.totalSeats} seats</p>
           </div>
@@ -468,73 +462,92 @@ const Planner = () => {
 
                   {group.standards.map((standard) => {
                     const fee = feeOf(standard, group);
-                    const revenue = standard.enrolled * fee;
+                    const enrolled = Math.min(standard.enrolled, standard.capacity);
+                    const revenue = enrolled * fee;
+                    const pct = standard.capacity > 0 ? Math.round((enrolled / standard.capacity) * 100) : 0;
+                    const setEnrolled = (v: number) =>
+                      patchStandard(group.id, standard.id, {
+                        enrolled: Math.max(0, Math.min(standard.capacity, v)),
+                      });
                     const isEditing = editingStandardId === standard.id;
 
                     return (
-                      <div key={standard.id} className="px-4 py-3 transition-colors hover:bg-muted/30 sm:px-5">
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:flex-nowrap">
-                          {/* Name */}
-                          <div className="min-w-0 flex-1 sm:w-52 sm:flex-none">
-                            <p className="truncate text-sm font-semibold text-foreground">
-                              {standard.name}
+                      <div key={standard.id} className="px-4 py-4 transition-colors hover:bg-muted/30 sm:px-5">
+                        {/* Row 1 — identity + revenue + edit */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm font-semibold text-foreground">
+                              <span className="truncate">{standard.name}</span>
                               {standard.code && (
-                                <span className="ml-1.5 text-xs font-medium text-muted-foreground">({standard.code})</span>
+                                <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                                  {standard.code}
+                                </span>
                               )}
                             </p>
-                            <p className="text-[11px] text-muted-foreground">
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
                               {formatINRFull(fee)}/yr
                               {standard.annualFee !== null && (
-                                <span className="ml-1 font-semibold text-highlight">· custom</span>
+                                <span className="ml-1 font-semibold text-highlight">· custom fee</span>
                               )}
                             </p>
                           </div>
 
-                          {/* Slider */}
-                          <div className="flex flex-1 items-center gap-3">
-                            <span className="w-7 text-right text-xs font-semibold text-muted-foreground">
-                              {standard.capacity}
-                            </span>
-                            <Slider
-                              value={[Math.min(standard.enrolled, standard.capacity)]}
-                              max={standard.capacity}
-                              step={1}
-                              onValueChange={([v]) => patchStandard(group.id, standard.id, { enrolled: v })}
-                              className="flex-1"
-                              aria-label={`Students enrolled in ${standard.name}`}
-                            />
-                            <span className="w-8 font-display text-sm font-black text-foreground">
-                              {Math.min(standard.enrolled, standard.capacity)}
-                            </span>
-                          </div>
-
-                          {/* Revenue bar */}
-                          <div className="hidden min-w-[7rem] flex-1 items-center lg:flex">
-                            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                              <motion.div
-                                className="h-full rounded-full bg-green-600"
-                                animate={{ width: `${Math.min(100, (revenue / maxRowRevenue) * 100)}%` }}
-                                transition={{ type: "spring", stiffness: 220, damping: 30 }}
-                              />
+                          <div className="flex flex-shrink-0 items-center gap-2.5">
+                            <div className="text-right">
+                              <p className="font-display text-sm font-black leading-none text-foreground sm:text-base">
+                                {revenue > 0 ? formatINR(revenue) : "₹0"}
+                              </p>
+                              <p className="mt-0.5 text-[10px] text-muted-foreground">annual</p>
                             </div>
-                          </div>
-
-                          {/* Revenue + edit */}
-                          <div className="flex items-center gap-2">
-                            <span className="w-20 text-right font-display text-sm font-bold text-foreground">
-                              {revenue > 0 ? formatINR(revenue) : "₹0"}
-                            </span>
                             <button onClick={() => setEditingStandardId(isEditing ? null : standard.id)}
-                              className={`rounded-lg border p-1.5 transition-all ${
+                              className={`flex-shrink-0 rounded-lg border p-2 transition-all ${
                                 isEditing
                                   ? "border-accent bg-accent text-accent-foreground"
-                                  : "border-border text-muted-foreground hover:text-foreground"
+                                  : "border-border text-muted-foreground hover:border-accent/50 hover:text-foreground"
                               }`}
                               aria-label={`Edit ${standard.name}`}
                               aria-expanded={isEditing}>
-                              {isEditing ? <X className="h-3.5 w-3.5" /> : <Settings2 className="h-3.5 w-3.5" />}
+                              {isEditing ? <X className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
                             </button>
                           </div>
+                        </div>
+
+                        {/* Row 2 — stepper · slider · live count */}
+                        <div className="mt-3 flex items-center gap-2 sm:gap-3">
+                          <button
+                            onClick={() => setEnrolled(enrolled - 1)}
+                            disabled={enrolled <= 0}
+                            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-all hover:border-accent hover:text-foreground disabled:opacity-40 disabled:hover:border-border"
+                            aria-label={`One fewer student in ${standard.name}`}>
+                            <Minus className="h-4 w-4" />
+                          </button>
+
+                          <Slider
+                            value={[enrolled]}
+                            max={Math.max(1, standard.capacity)}
+                            step={1}
+                            onValueChange={([v]) => setEnrolled(v)}
+                            className="flex-1"
+                            thumbClassName="h-6 w-6"
+                            aria-label={`Students enrolled in ${standard.name}`}
+                          />
+
+                          <button
+                            onClick={() => setEnrolled(enrolled + 1)}
+                            disabled={enrolled >= standard.capacity}
+                            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-all hover:border-accent hover:text-foreground disabled:opacity-40 disabled:hover:border-border"
+                            aria-label={`One more student in ${standard.name}`}>
+                            <Plus className="h-4 w-4" />
+                          </button>
+
+                          <div className="flex w-[5.5rem] flex-shrink-0 items-baseline justify-end gap-0.5 sm:w-24">
+                            <span className="font-display text-lg font-black tabular-nums text-foreground">{enrolled}</span>
+                            <span className="text-xs text-muted-foreground">/{standard.capacity}</span>
+                          </div>
+
+                          <span className="hidden w-11 flex-shrink-0 rounded-md bg-primary/10 py-1 text-center text-[11px] font-bold tabular-nums text-primary sm:inline-block">
+                            {pct}%
+                          </span>
                         </div>
 
                         {/* Inline editor */}
