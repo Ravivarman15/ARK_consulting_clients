@@ -7,7 +7,7 @@
 export const formatPrice = (rupees: number) => `₹${rupees.toLocaleString("en-IN")}`;
 
 /** One-off charge that unlocks the full 12-metric audit report. */
-export const REPORT_UNLOCK_PRICE = 599;
+export const REPORT_UNLOCK_PRICE = 999;
 
 export const toPaise = (rupees: number) => Math.round(rupees * 100);
 
