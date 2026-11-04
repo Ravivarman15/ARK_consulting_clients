@@ -30,7 +30,7 @@ interface AuthContextValue {
   /** Management never pays; clients unlock by purchase. */
   hasFullAccess: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (details: SignUpDetails) => Promise<{ error: string | null; needsConfirmation: boolean }>;
+  signUp: (details: SignUpDetails) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   markPaid: (paymentId?: string) => Promise<void>;
@@ -119,11 +119,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       },
 
       signUp: async (details) => {
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email: details.email.trim().toLowerCase(),
           password: details.password,
           options: {
-            emailRedirectTo: `${window.location.origin}/planner`,
             // Read back out by the handle_new_user() trigger to build the
             // profile row the management dashboard lists.
             data: {
@@ -134,8 +133,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             },
           },
         });
-        if (error) return { error: error.message, needsConfirmation: false };
-        return { error: null, needsConfirmation: !data.session };
+        if (error) return { error: error.message };
+        return { error: null };
       },
 
       signOut: async () => {

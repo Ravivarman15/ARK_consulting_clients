@@ -35,7 +35,6 @@ const Auth = () => {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmSent, setConfirmSent] = useState(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -52,7 +51,6 @@ const Auth = () => {
   const switchMode = (next: Mode) => {
     setMode(next);
     setError(null);
-    setConfirmSent(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,12 +75,11 @@ const Auth = () => {
       return setError("Your name and institution name are both required.");
     }
 
-    const { error: err, needsConfirmation } = await signUp({
+    const { error: err } = await signUp({
       email, password, fullName, institutionName, phone, location: locationCity,
     });
     setBusy(false);
     if (err) return setError(err);
-    if (needsConfirmation) return setConfirmSent(true);
     navigate(redirectTo, { replace: true });
   };
 
@@ -135,23 +132,7 @@ const Auth = () => {
             ))}
           </div>
 
-          {confirmSent ? (
-            <div className="py-6 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-green-500/15 border border-green-500/30">
-                <Mail className="h-7 w-7 text-green-400" />
-              </div>
-              <h2 className="font-display text-lg font-bold text-primary-foreground">Confirm your email</h2>
-              <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-primary-foreground/50">
-                We sent a confirmation link to <span className="font-semibold text-primary-foreground/80">{email}</span>.
-                Open it to activate your account, then sign in.
-              </p>
-              <button type="button" onClick={() => switchMode("login")}
-                className="mt-6 text-sm font-bold text-accent transition-colors hover:text-accent/80">
-                Back to sign in
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-3.5">
+          <form onSubmit={handleSubmit} className="space-y-3.5">
               <AnimatePresence initial={false} mode="popLayout">
                 {mode === "signup" && (
                   <motion.div key="signup-fields"
@@ -211,10 +192,9 @@ const Auth = () => {
                 )}
               </motion.button>
             </form>
-          )}
         </div>
 
-        {mode === "signup" && !confirmSent && (
+        {mode === "signup" && (
           <div className="mt-5 rounded-2xl border border-primary-foreground/8 bg-primary-foreground/[0.03] p-4 backdrop-blur-sm">
             <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-primary-foreground/35">
               <Sparkles className="h-3 w-3 text-accent" /> Included with every account
