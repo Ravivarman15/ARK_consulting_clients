@@ -312,6 +312,7 @@ const Questionnaire = () => {
         auditResult={auditResult}
         onBackHome={() => navigate("/")}
         institutionName={formData.institutionName || "Your Institution"}
+        formData={formData}
       />
     );
   }

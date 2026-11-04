@@ -12,10 +12,35 @@ import type { AuditResult, ScoreResult, LeakageItem } from "@/utils/scoring";
 import { useAuth } from "@/contexts/AuthContext";
 import { CONSULTING_TIERS, formatPrice, REPORT_UNLOCK_PRICE, toPaise } from "@/utils/pricing";
 
+interface FormData {
+  institutionName: string;
+  ownerName: string;
+  email: string;
+  phone: string;
+  location: string;
+  studentStrength: string;
+  monthlyRevenue: string;
+  avgFeePerStudent: string;
+  highestAnnualFee: string;
+  avgStudentsPerBatch: string;
+  totalBatchesPerDay: string;
+  totalTeachingArea: string;
+  salaryPercentOfRevenue: string;
+  feeCollectionMethod: string;
+  feePendingPercentage: string;
+  monthlyEnquiries: string;
+  conversionRate: string;
+  studentDropoutRate: string;
+  teacherLeaveImpact: string;
+  ownerDailyInvolvement: string;
+  [key: string]: string;
+}
+
 interface ScoreCardProps {
   auditResult: AuditResult;
   onBackHome: () => void;
   institutionName: string;
+  formData?: FormData;
 }
 
 const categoryIcons: Record<string, any> = {
@@ -145,7 +170,7 @@ const formatCurrency = (n: number) => {
   return `₹${n}`;
 };
 
-const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps) => {
+const ScoreCard = ({ auditResult, onBackHome, institutionName, formData }: ScoreCardProps) => {
   const { scores, efficiencyPercent, healthVerdict, leakageItems, totalLeakageLow, totalLeakageHigh } = auditResult;
   const { hasFullAccess, isManagement, markPaid } = useAuth();
   // Management is free and paid clients carry their unlock on their profile;
@@ -318,11 +343,27 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
     sf("normal", 13); ink(185, 205, 235);
     doc.text("12-Metric RAG Evaluation", ML, 140);
 
-    // Prepared for box
-    fi(10, 40, 80); doc.rect(0, 155, PW, 44, "F");
-    fi(...GOLD); doc.rect(0, 155, 6, 44, "F");
-    sf("bold", 10); ink(...GOLD); doc.text("PREPARED FOR", ML + 12, 168);
-    sf("bold", 20); ink(...WHITE); doc.text(W(institutionName, PW - ML - 30), ML + 12, 180);
+    // Prepared for box — dynamic institution details
+    const coverBoxY = 150;
+    const hasContactDetails = formData && (formData.ownerName || formData.location || formData.email || formData.phone);
+    const coverBoxH = hasContactDetails ? 58 : 44;
+    fi(10, 40, 80); doc.rect(0, coverBoxY, PW, coverBoxH, "F");
+    fi(...GOLD); doc.rect(0, coverBoxY, 6, coverBoxH, "F");
+    sf("bold", 10); ink(...GOLD); doc.text("PREPARED FOR", ML + 12, coverBoxY + 13);
+    sf("bold", 20); ink(...WHITE); doc.text(W(institutionName, PW - ML - 30), ML + 12, coverBoxY + 25);
+    if (hasContactDetails) {
+      sf("normal", 10); ink(160, 185, 220);
+      const contactParts: string[] = [];
+      if (formData.ownerName) contactParts.push(san(formData.ownerName));
+      if (formData.location) contactParts.push(san(formData.location));
+      doc.text(contactParts.join("  |  "), ML + 12, coverBoxY + 35);
+      const contactParts2: string[] = [];
+      if (formData.email) contactParts2.push(san(formData.email));
+      if (formData.phone) contactParts2.push(san(formData.phone));
+      if (contactParts2.length > 0) {
+        doc.text(contactParts2.join("  |  "), ML + 12, coverBoxY + 42);
+      }
+    }
 
     sf("normal", 10); ink(155, 175, 210);
     doc.text(`Generated: ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}`, ML, PH - 24);
@@ -340,11 +381,11 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
       sf("normal", 10); ink(200, 215, 235); doc.text(item.label, sx + SCOL / 2, SY + 28, { align: "center" });
     });
 
-    // ── PAGE 2 — EXECUTIVE SUMMARY ──
+    // ── PAGE 2 — INSTITUTIONAL PROFILE + EXECUTIVE SUMMARY ──
     doc.addPage(); pgNum++; curY = 0;
     fi(...NAVY); doc.rect(0, 0, PW, 26, "F");
     fi(...GOLD); doc.rect(0, 26, PW, 1, "F");
-    sf("bold", 14); ink(...GOLD); doc.text("Executive Structural Insight", ML, 17);
+    sf("bold", 14); ink(...GOLD); doc.text("Institutional Performance Summary", ML, 17);
     sf("normal", 10); ink(160, 185, 220); doc.text(san(institutionName), PW - MR, 17, { align: "right" });
     curY = 34;
 
@@ -357,7 +398,7 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
     fi(...hBar); doc.rect(0, curY, 6, 30, "F");
     sf("bold", 10); ink(...GRAY_MD); doc.text("STRUCTURAL EFFICIENCY INDEX", ML + 10, curY + 10);
     sf("bold", 22); ink(...hText); doc.text(`${efficiencyPercent}%`, ML + 10, curY + 22);
-    sf("bold", 14); ink(...hText); doc.text(healthVerdict, ML + 35, curY + 22);
+    sf("bold", 14); ink(...hText); doc.text(san(healthVerdict), ML + 35, curY + 22);
     curY += 38;
 
     // Executive narrative
@@ -367,6 +408,77 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
     guard(narLines.length * 5.5 + 10);
     doc.text(narLines, ML + 5, curY);
     curY += narLines.length * 5.5 + 12;
+
+    // ── INSTITUTION PROFILE (dynamic user data) ──
+    if (formData) {
+      sectionHeader("INSTITUTION PROFILE — SUBMITTED DATA");
+
+      const profileSections = [
+        {
+          title: "Revenue & Pricing",
+          items: [
+            { label: "Active Student Strength", value: formData.studentStrength },
+            { label: "Average Monthly Revenue", value: formData.monthlyRevenue },
+            { label: "Average Fee per Student (Monthly)", value: formData.avgFeePerStudent },
+            { label: "Highest Annual Fee Charged", value: formData.highestAnnualFee },
+          ],
+        },
+        {
+          title: "Batch & Capacity",
+          items: [
+            { label: "Average Students per Batch", value: formData.avgStudentsPerBatch },
+            { label: "Total Batches Run per Day", value: formData.totalBatchesPerDay },
+            { label: "Total Usable Teaching Area", value: formData.totalTeachingArea },
+          ],
+        },
+        {
+          title: "Cost & Cash Discipline",
+          items: [
+            { label: "Salary as % of Revenue", value: formData.salaryPercentOfRevenue },
+            { label: "Fee Collection Mode", value: formData.feeCollectionMethod },
+            { label: "% Fees Pending at Any Time", value: formData.feePendingPercentage },
+          ],
+        },
+        {
+          title: "Admissions & Growth",
+          items: [
+            { label: "Monthly Enquiries Received", value: formData.monthlyEnquiries },
+            { label: "Enquiry to Admission Conversion", value: formData.conversionRate },
+          ],
+        },
+        {
+          title: "Stability & Scalability",
+          items: [
+            { label: "Student Dropout Rate", value: formData.studentDropoutRate },
+            { label: "Impact if Key Teacher Leaves", value: formData.teacherLeaveImpact },
+            { label: "Owner Daily Involvement", value: formData.ownerDailyInvolvement },
+          ],
+        },
+      ];
+
+      profileSections.forEach((section) => {
+        // Section sub-header
+        guard(14);
+        fi(245, 247, 252); doc.rect(ML, curY, CW, 10, "F");
+        fi(...GOLD); doc.rect(ML, curY, 4, 10, "F");
+        sf("bold", 10); ink(...NAVY); doc.text(section.title.toUpperCase(), ML + 10, curY + 7);
+        curY += 12;
+
+        section.items.forEach((item, idx) => {
+          if (!item.value) return;
+          guard(10);
+          const rowBg: RGB = idx % 2 === 0 ? [252, 253, 255] : [245, 247, 250];
+          fi(...rowBg); doc.rect(ML, curY, CW, 9, "F");
+          sf("normal", 10); ink(...GRAY_MD); doc.text(san(item.label), ML + 8, curY + 6.5);
+          sf("bold", 10); ink(...NAVY); doc.text(san(item.value), PW - MR - 8, curY + 6.5, { align: "right" });
+          curY += 9;
+        });
+
+        curY += 4;
+      });
+
+      curY += 4;
+    }
 
     // Revenue Leakage Table
     if (leakageItems.length > 0) {
@@ -402,7 +514,7 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
       curY += discLines.length * 5.5 + 12;
     }
 
-    // 12 Metric RAG Summary
+    // 12 Metric RAG Detailed Evaluation (with Your Metrics + Benchmark)
     sectionHeader("12-METRIC RAG EVALUATION");
 
     scores.forEach((score, idx) => {
@@ -410,17 +522,24 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
       const meta = categoryMeta[score.category];
       const indicator = score.score === "GREEN" ? meta?.greenIndicator : score.score === "AMBER" ? meta?.amberIndicator : meta?.redIndicator;
 
-      sf("normal", 12);
+      sf("normal", 10);
       const indLines = W(indicator ?? "", CW - 36);
-      const cardH = 22 + indLines.length * 5.5;
-      guard(cardH + 4);
+      const detailLines = W(score.details ?? "", (CW - 36) / 2 - 4);
+      const benchLines = W(meta?.benchmark ?? "", (CW - 36) / 2 - 4);
+      const whatLines = W(meta?.whatItMeans ?? "", CW - 36);
 
+      // Calculate card height: title row + label + your metrics/benchmark + what it means + indicator
+      const metricsRowH = Math.max(detailLines.length, benchLines.length) * 4.5 + 10;
+      const cardH = 18 + metricsRowH + whatLines.length * 4.5 + indLines.length * 4.5 + 22;
+      guard(cardH + 6);
+
+      // Card background and accent bar
       fi(...SC.bg); doc.rect(ML, curY, CW, cardH, "F");
       fi(...SC.bar); doc.rect(ML, curY, 6, cardH, "F");
-      // Bottom border
       doc.setDrawColor(...SC.bdr); doc.setLineWidth(0.3);
       doc.line(ML, curY + cardH, ML + CW, curY + cardH);
 
+      // Title row
       sf("bold", 13); ink(...NAVY); doc.text(san(`${idx + 1}. ${score.category}`), ML + 12, curY + 9);
 
       // Badge
@@ -429,10 +548,40 @@ const ScoreCard = ({ auditResult, onBackHome, institutionName }: ScoreCardProps)
       fi(...SC.bar); doc.roundedRect(PW - MR - badgeW - 4, curY + 3, badgeW, 8, 4, 4, "F");
       sf("bold", 8); ink(...WHITE); doc.text(displayLabel, PW - MR - badgeW / 2 - 4, curY + 8.5, { align: "center" });
 
-      sf("normal", 12); ink(...GRAY_DK); doc.text(san(score.label), ML + 12, curY + 16);
-      sf("normal", 12); ink(...SC.text); doc.text(indLines, ML + 12, curY + 22);
+      // Score label
+      sf("normal", 11); ink(...GRAY_DK); doc.text(san(score.label), ML + 12, curY + 16);
 
-      curY += cardH + 4;
+      let innerY = curY + 22;
+
+      // Your Metrics vs Benchmark side-by-side
+      const colW = (CW - 24) / 2;
+      const leftX = ML + 12;
+      const rightX = ML + 12 + colW + 6;
+
+      // Left: Your Metrics
+      fi(255, 237, 237); doc.roundedRect(leftX, innerY, colW, metricsRowH, 3, 3, "F");
+      sf("bold", 8); ink(175, 24, 24); doc.text("YOUR METRICS", leftX + 4, innerY + 6);
+      sf("normal", 9); ink(...GRAY_DK); doc.text(detailLines, leftX + 4, innerY + 12);
+
+      // Right: Benchmark
+      fi(231, 249, 239); doc.roundedRect(rightX, innerY, colW, metricsRowH, 3, 3, "F");
+      sf("bold", 8); ink(14, 98, 46); doc.text("AUDIT BENCHMARK", rightX + 4, innerY + 6);
+      sf("normal", 9); ink(...GRAY_DK); doc.text(benchLines, rightX + 4, innerY + 12);
+
+      innerY += metricsRowH + 4;
+
+      // What this measures
+      sf("bold", 8); ink(...GRAY_MD); doc.text("WHAT THIS MEASURES", ML + 12, innerY);
+      innerY += 5;
+      sf("normal", 9); ink(...GRAY_DK); doc.text(whatLines, ML + 12, innerY);
+      innerY += whatLines.length * 4.5 + 4;
+
+      // RAG indicator
+      sf("bold", 8); ink(...SC.text); doc.text("RAG IMPACT DIAGNOSTIC", ML + 12, innerY);
+      innerY += 5;
+      sf("normal", 9); ink(...SC.text); doc.text(indLines, ML + 12, innerY);
+
+      curY += cardH + 6;
     });
 
     // What This Doesn't Cover
