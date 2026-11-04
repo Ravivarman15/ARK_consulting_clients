@@ -25,7 +25,7 @@ const Footer = () => {
 
           {/* Address 1 */}
           <div className="text-center">
-            <h3 className="mb-4 font-display text-base font-semibold tracking-wide uppercase text-primary-foreground/80">Head Office</h3>
+            <h3 className="mb-4 font-display text-base font-semibold tracking-wide uppercase text-primary-foreground/80">Head Office location</h3>
             <div className="flex items-start justify-center gap-2">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent/70" />
               <p className="text-sm leading-relaxed text-primary-foreground/60">
